@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lazada Logistics Park - Interactive Material Flow Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #030712;
+            overflow-x: hidden;
+        }
+        /* Custom Glowing and Animation Effects */
+       .glow-orange {
+            box-shadow: 0 0 15px rgba(243, 111, 33, 0.4);
+        }
+       .glow-blue {
+            box-shadow: 0 0 15px rgba(15, 19, 109, 0.5);
+        }
+       .laser-line {
+            animation: laserScan 2s infinite ease-in-out;
+        }
+        @keyframes laserScan {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(140px); }
+        }
+        /* Package movement along conveyor path animation */
+        @keyframes flow {
+            to { stroke-dashoffset: -40; }
+        }
+       .conveyor-flow {
+            stroke-dasharray: 8, 12;
+            animation: flow 2s linear infinite;
+        }
+       .conveyor-flow-fast {
+            stroke-dasharray: 8, 12;
+            animation: flow 0.8s linear infinite;
+        }
+       .active-node-ring {
+            animation: pulseRing 1.5s infinite;
+        }
+        @keyframes pulseRing {
+            0% { r: 10; opacity: 1; }
+            100% { r: 24; opacity: 0; }
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col">
+
+    <header class="bg-slate-900/90 border-b border-slate-800 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+            <div class="flex space-x-1 items-center">
+                <span class="w-4 h-8 bg-[#0f136d] rounded-l-md block transform -skew-x-12"></span>
+                <span class="w-4 h-8 bg-[#f36f21] rounded-r-md block transform -skew-x-12"></span>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                    LAZADA LOGISTICS PARK 
+                    <span class="bg-orange-500/10 text-orange-400 text-xs px-2 py-0.5 rounded-full border border-orange-500/20">Sóng Thần 1</span>
+                </h1>
+                <p class="text-xs text-slate-400">Hệ Thống Giám Sát Luồng Di Chuyển Vật Lý Bưu Kiện 4.0</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-6 text-sm">
+            <div class="hidden md:flex items-center space-x-4">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                    <span class="text-xs text-slate-400">PLC Connect: Active</span>
+                </div>
+                <div class="border-l border-slate-800 h-4"></div>
+                <div class="text-xs text-slate-400">Thông Lượng: <span class="text-white font-semibold">45,000 p/h</span></div>
+                <div class="border-l border-slate-800 h-4"></div>
+                <div class="text-xs text-slate-400">Mức Tự Động Hóa: <span class="text-emerald-400 font-semibold">99%</span></div>
+            </div>
+
+            <button id="autoplayBtn" class="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 glow-orange">
+                <i class="fa-solid fa-play"></i>
+                <span>Tự Động Thuyết Trình</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 h-[calc(100vh-80px)] overflow-hidden">
+        
+        <section class="lg:col-span-7 bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between overflow-hidden relative">
+            
+            <div class="flex items-center justify-between border-b border-slate-800/60 pb-4 mb-4">
+                <div class="flex space-x-2" id="stageTabs">
+                    <button onclick="switchStage('inbound')" id="tab-inbound" class="px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-orange-500/10 text-orange-400 border-orange-500/20">
+                        1. INBOUND (Nhập)
+                    </button>
+                    <button onclick="switchStage('sortation')" id="tab-sortation" class="px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all text-slate-400 border-slate-800 hover:border-slate-700">
+                        2. SORTATION (Chia chọn)
+                    </button>
+                    <button onclick="switchStage('outbound')" id="tab-outbound" class="px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all text-slate-400 border-slate-800 hover:border-slate-700">
+                        3. OUTBOUND (Xuất)
+                    </button>
+                </div>
+                <div class="text-xs text-slate-500 flex items-center gap-1.5">
+                    <i class="fa-solid fa-info-circle"></i> Nhấp các chấm cam để điều hướng thiết bị
+                </div>
+            </div>
+
+            <div class="flex-1 flex items-center justify-center relative bg-slate-950/80 rounded-xl p-4 border border-slate-900 overflow-hidden">
+                <svg id="warehouseMap" viewBox="0 0 800 450" class="w-full h-full max-h-[360px]">
+                    <defs>
+                        <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+                            <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.03" />
+                        </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+
+                    <g stroke="#1e293b" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none">
+                        <path d="M 30 100 L 160 100 L 260 100 L 320 180" />
+                        <path d="M 320 180 L 300 280 L 460 280" />
+                        <path d="M 320 180 L 430 180" />
+                        <path d="M 430 180 C 430 110, 750 110, 750 180 C 750 250, 430 250, 430 180 Z" />
+                        <path d="M 480 120 L 460 60" />
+                        <path d="M 600 115 L 590 55" />
+                        <path d="M 700 135 L 720 70" />
+                        <path d="M 680 235 L 700 300" />
+                        <path d="M 580 245 L 580 310" />
+                        <path d="M 480 235 L 460 300" />
+                    </g>
+
+                    <g stroke-linecap="round" fill="none" opacity="0.8">
+                        <path d="M 30 100 L 160 100" stroke="#f36f21" stroke-width="4" class="conveyor-flow" />
+                        <path d="M 160 100 L 260 100" stroke="#f36f21" stroke-width="4" class="conveyor-flow-fast" />
+                        <path d="M 260 100 L 320 180" stroke="#f36f21" stroke-width="4" class="conveyor-flow" />
+                        <path id="flow-small" d="M 320 180 L 300 280 L 460 280" stroke="#00d2ff" stroke-width="4" class="conveyor-flow" />
+                        <path id="flow-main" d="M 320 180 L 430 180" stroke="#f36f21" stroke-width="4" class="conveyor-flow" />
+                        <path d="M 430 180 C 430 110, 750 110, 750 180 C 750 250, 430 250, 430 180 Z" stroke="#3b82f6" stroke-width="6" class="conveyor-flow-fast" />
+                    </g>
+
+                    <text x="35" y="60" fill="#94a3b8" font-size="11" font-weight="700" letter-spacing="1">DOCK NHẬP HÀNG (INBOUND)</text>
+                    <text x="490" y="183" fill="#94a3b8" font-size="12" font-weight="700" letter-spacing="1">VÒNG LẶP CROSS-BELT (45,000 P/H)</text>
+                    <text x="510" y="380" fill="#94a3b8" font-size="11" font-weight="700" letter-spacing="1">DOCK XUẤT HÀNG (OUTBOUND)</text>
+
+                    <g id="node-1" class="cursor-pointer" onclick="selectNode(1)">
+                        <circle cx="95" cy="100" r="14" fill="#0f136d" stroke="#f36f21" stroke-width="2" />
+                        <circle id="pulse-1" cx="95" cy="100" r="10" fill="none" stroke="#f36f21" stroke-width="2" class="active-node-ring hidden" />
+                        <text x="91" y="104" fill="#fff" font-size="11" font-weight="800">1</text>
+                        <text x="95" y="127" fill="#f36f21" font-size="10" font-weight="700" text-anchor="middle">Telescopic</text>
+                    </g>
+
+                    <g id="node-2" class="cursor-pointer" onclick="selectNode(2)">
+                        <circle cx="195" cy="100" r="14" fill="#0f136d" stroke="#f36f21" stroke-width="2" />
+                        <circle id="pulse-2" cx="195" cy="100" r="10" fill="none" stroke="#f36f21" stroke-width="2" class="active-node-ring hidden" />
+                        <text x="191" y="104" fill="#fff" font-size="11" font-weight="800">2</text>
+                        <text x="195" y="127" fill="#f36f21" font-size="10" font-weight="700" text-anchor="middle">Singulator</text>
+                    </g>
+
+                    <g id="node-3" class="cursor-pointer" onclick="selectNode(3)">
+                        <circle cx="280" cy="125" r="14" fill="#0f136d" stroke="#f36f21" stroke-width="2" />
+                        <circle id="pulse-3" cx="280" cy="125" r="10" fill="none" stroke="#f36f21" stroke-width="2" class="active-node-ring hidden" />
+                        <text x="276" y="129" fill="#fff" font-size="11" font-weight="800">3</text>
+                        <text x="280" y="152" fill="#f36f21" font-size="10" font-weight="700" text-anchor="middle">Hầm DWS</text>
+                    </g>
+
+                    <g id="node-4" class="cursor-pointer" onclick="selectNode(4)">
+                        <circle cx="320" cy="180" r="14" fill="#0f136d" stroke="#f36f21" stroke-width="2" />
+                        <circle id="pulse-4" cx="320" cy="180" r="10" fill="none" stroke="#f36f21" stroke-width="2" class="active-node-ring hidden" />
+                        <text x="316" y="184" fill="#fff" font-size="11" font-weight="800">4</text>
+                        <text x="362" y="184" fill="#f36f21" font-size="10" font-weight="700" text-anchor="middle">Wheel Sorter</text>
+                    </g>
+
+                    <g id="node-5" class="cursor-pointer" onclick="selectNode(5)">
+                        <circle cx="430" cy="180" r="14" fill="#0f136d" stroke="#3b82f6" stroke-width="2" />
+                        <circle id="pulse-5" cx="430" cy="180" r="10" fill="none" stroke="#3b82f6" stroke-width="2" class="active-node-ring hidden" />
+                        <text x="426" y="184" fill="#fff" font-size="11" font-weight="800">5</text>
+                        <text x="430" y="210" fill="#3b82f6" font-size="10" font-weight="700" text-anchor="middle">Carriers</text>
+                    </g>
+
+                    <g id="node-6" class="cursor-pointer" onclick="selectNode(6)">
+                        <circle cx="590" cy="180" r="14" fill="#0f136d" stroke="#3b82f6" stroke-width="2" />
+                        <circle id="pulse-6" cx="590" cy="180" r="10" fill="none" stroke="#3b82f6" stroke-width="2" class="active-node-ring hidden" />
+                        <text x="586" y="184" fill="#fff" font-size="11" font-weight="800">6</text>
+                        <text x="590" y="210" fill="#3b82f6" font-size="10" font-weight="700" text-anchor="middle">AI Router</text>
+                    </g>
+
+                    <g id="node-7" class="cursor-pointer" onclick="selectNode(7)">
+                        <circle cx="430" cy="280" r="14" fill="#0f136d" stroke="#3b82f6" stroke-width="2" />
+                        <circle id="pulse-7" cx="430" cy="280" r="10" fill="none" stroke="#3b82f6" stroke-width="2" class="active-node-ring hidden" />
+                        <text x="426" y="284" fill="#fff" font-size="11" font-weight="800">7</text>
+                        <text x="430" y="307" fill="#3b82f6" font-size="10" font-weight="700" text-anchor="middle">Small Parcel</text>
+                    </g>
+
+                    <g id="node-8" class="cursor-pointer" onclick="selectNode(8)">
+                        <circle cx="590" cy="55" r="14" fill="#0f136d" stroke="#10b981" stroke-width="2" />
+                        <circle id="pulse-8" cx="590" cy="55" r="10" fill="none" stroke="#10b981" stroke-width="2" class="active-node-ring hidden" />
+                        <text x="586" y="59" fill="#fff" font-size="11" font-weight="800">8</text>
+                        <text x="590" y="42" fill="#10b981" font-size="10" font-weight="700" text-anchor="middle">Máng Xả</text>
+                    </g>
+
+                    <g id="node-9" class="cursor-pointer" onclick="selectNode(9)">
+                        <circle cx="580" cy="310" r="14" fill="#0f136d" stroke="#10b981" stroke-width="2" />
+                        <circle id="pulse-9" cx="580" cy="310" r="10" fill="none" stroke="#10b981" stroke-width="2" class="active-node-ring hidden" />
+                        <text x="576" y="314" fill="#fff" font-size="11" font-weight="800">9</text>
+                        <text x="580" y="337" fill="#10b981" font-size="10" font-weight="700" text-anchor="middle">Sensors</text>
+                    </g>
+
+                    <g id="node-10" class="cursor-pointer" onclick="selectNode(10)">
+                        <circle cx="700" cy="300" r="14" fill="#0f136d" stroke="#10b981" stroke-width="2" />
+                        <circle id="pulse-10" cx="700" cy="300" r="10" fill="none" stroke="#10b981" stroke-width="2" class="active-node-ring hidden" />
+                        <text x="696" y="304" fill="#fff" font-size="11" font-weight="800">10</text>
+                        <text x="700" y="327" fill="#10b981" font-size="10" font-weight="700" text-anchor="middle">Telescopic Out</text>
+                    </g>
+
+                    <g id="node-11" class="cursor-pointer" onclick="selectNode(11)">
+                        <circle cx="740" cy="370" r="14" fill="#0f136d" stroke="#10b981" stroke-width="2" />
+                        <circle id="pulse-11" cx="740" cy="370" r="10" fill="none" stroke="#10b981" stroke-width="2" class="active-node-ring hidden" />
+                        <text x="734" y="374" fill="#fff" font-size="11" font-weight="800">11</text>
+                        <text x="740" y="397" fill="#10b981" font-size="10" font-weight="700" text-anchor="middle">Xe Điện EVs</text>
+                    </g>
+                </svg>
+            </div>
+
+            <div class="mt-4 flex items-center justify-between bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                <button onclick="prevNode()" class="text-slate-400 hover:text-white px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-900/40 hover:bg-slate-900 transition text-xs font-semibold">
+                    <i class="fa-solid fa-arrow-left mr-1"></i> Thiết bị trước
+                </button>
+                <div class="flex items-center space-x-1">
+                    <span class="text-xs text-slate-500">Tiến trình trình chiếu:</span>
+                    <span id="stepCounter" class="text-xs font-bold text-orange-400">Bước 1 / 11</span>
+                </div>
+                <button onclick="nextNode()" class="text-slate-400 hover:text-white px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-900/40 hover:bg-slate-900 transition text-xs font-semibold">
+                    Thiết bị tiếp <i class="fa-solid fa-arrow-right ml-1"></i>
+                </button>
+            </div>
+        </section>
+
+        <section class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between overflow-y-auto max-h-[100%]">
+            
+            <div id="targetBanner" class="flex items-center justify-between mb-4 bg-orange-500/10 text-orange-400 border border-orange-500/20 px-3 py-2 rounded-xl text-xs font-bold tracking-wider">
+                <span id="stageName">PHÂN KHU: INBOUND (NHẬP HÀNG)</span>
+                <span id="nodeNameBig">THIẾT BỊ SỐ: 01</span>
+            </div>
+
+            <div class="h-40 bg-slate-950 border border-slate-800 rounded-xl mb-4 flex flex-col items-center justify-center relative overflow-hidden" id="simulationArea">
+                </div>
+
+            <div class="mb-4">
+                <h2 id="machineTitleVi" class="text-xl font-extrabold text-white">Băng Chuyền Telescopic Inbound</h2>
+                <p id="machineTitleEn" class="text-xs text-slate-400 italic">Inbound Telescopic Conveyor System</p>
+            </div>
+
+            <div class="flex border-b border-slate-800 mb-4 text-xs font-semibold">
+                <button onclick="switchPanelTab('specs')" id="tabBtn-specs" class="flex-1 py-2 text-center text-orange-400 border-b-2 border-orange-500">Thông Số Kỹ Thuật</button>
+                <button onclick="switchPanelTab('physics')" id="tabBtn-physics" class="flex-1 py-2 text-center text-slate-400 border-b-2 border-transparent">Nguyên Lý Động Lực</button>
+                <button onclick="switchPanelTab('script')" id="tabBtn-script" class="flex-1 py-2 text-center text-slate-400 border-b-2 border-transparent">Kịch Bản Thuyết Trình</button>
+            </div>
+
+            <div class="flex-1 min-h-[180px] overflow-y-auto mb-4 text-sm" id="tabContent">
+                </div>
+
+            <div class="pt-4 border-t border-slate-800 flex space-x-2">
+                <button id="triggerActionBtn" onclick="triggerAction()" class="flex-1 bg-orange-600 hover:bg-orange-500 text-white font-semibold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition glow-orange">
+                    <i class="fa-solid fa-cogs"></i> Kích Hoạt Mô Phỏng Thực Tế
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-slate-900 border-t border-slate-800 py-2.5 px-6 flex items-center justify-between text-xs text-slate-500">
+        <div>&copy; 2026 Mai Thiên Phát - Chuyên gia Săn tìm Công nghệ & Truyền thông Lazada</div>
+        <div class="flex items-center space-x-4">
+            <span>Power Source: Điện Mặt Trời Solar 100% (Green Logistics Park)</span>
+            <div class="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
+            <span>Uptime: 99.98%</span>
+        </div>
+    </footer>
+
+    <script>
+        // Database containing 11 nodes of Lazada's flow
+        const nodesData = {
+            1: {
+                id: 1,
+                stage: "inbound",
+                stageLabel: "PHÂN KHU: INBOUND (NHẬP HÀNG & TIỀN XỬ LÝ)",
+                titleVi: "Băng Chuyền Telescopic Inbound",
+                titleEn: "Inbound Telescopic Conveyor System",
+                specs: `
+                    <div class="space-y-2">
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Cơ chế vươn:</span><span class="text-white font-medium">Bơm thủy lực xi-lanh kép</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Chiều dài vươn tối đa:</span><span class="text-white font-medium">18 mét (Đi thẳng vào lòng xe container)</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Vận tốc băng tải:</span><span class="text-white font-medium">0.8 - 1.2 m/s</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Vật liệu belt:</span><span class="text-white font-medium">Cao su tổng hợp PU chịu lực kéo cao</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Tiết kiệm nhân lực:</span><span class="text-emerald-400 font-bold">-91% bốc vác cơ bắp</span></div>
+                    </div>
+                `,
+                physics: `
+                    <div class="space-y-3">
+                        <p class="text-slate-300">Hệ thống áp dụng lực ma sát động để luân chuyển dòng vật chất từ trạng thái tĩnh $v_0 = 0$ sang vận tốc làm việc định mức $v$.</p>
+                        <p class="text-orange-400 font-mono text-center my-2">$$F_{friction} = \mu \cdot m \cdot g \cdot \cos(\alpha)$$</p>
+                        <p class="text-slate-400 text-xs">Trong đó $\mu$ là hệ số ma sát bề mặt belt PU, $\alpha$ là độ nghiêng dốc nạp liệu tùy biến từ $-5^\circ$ đến $+15^\circ$. Băng chuyền triệt tiêu hiện tượng dội ngược lực cơ học nhờ cụm giảm xóc lò xo giảm nảy.</p>
+                    </div>
+                `,
+                script: `
+                    <ul class="list-disc pl-4 space-y-2 text-slate-300">
+                        <li><strong>Mở đầu:</strong> "Kính thưa quý hội đồng, hành trình vật lý của gói hàng khởi đầu tại khu vực Dock nhận hàng. Hệ thống băng chuyền Telescopic vươn dài 18m thò sâu vào lòng xe tải."</li>
+                        <li><strong>Điểm nhấn:</strong> "Công nghệ này giúp công nhân xếp dỡ đặt trực tiếp các gói hàng lên băng chuyền mà không cần đi lại, tối ưu 100% công thái học và rút ngắn thời gian turnaround time cho phương tiện."</li>
+                    </ul>
+                `,
+                simType: "telescopic"
+            },
+            2: {
+                id: 2,
+                stage: "inbound",
+                stageLabel: "PHÂN KHU: INBOUND (NHẬP HÀNG & TIỀN XỬ LÝ)",
+                titleVi: "Thiết Bị Tách Dòng Singulator",
+                titleEn: "Parcel Unscrambler & Singulator Conveyor",
+                specs: `
+                    <div class="space-y-2">
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Nhiệm vụ:</span><span class="text-white font-medium">Bóc tách dòng hàng lộn xộn (mass flow) thành 1 hàng dọc</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Cơ chế tách:</span><span class="text-white font-medium">Gia tốc tốc độ (Speed Differential Belt)</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Cấu hình con lăn:</span><span class="text-white font-medium">Skewed Rollers (Con lăn chéo hướng tâm)</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Độ chính xác tách dòng:</span><span class="text-emerald-400 font-bold">> 99.0%</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Khoảng cách an toàn (pitch):</span><span class="text-white font-medium">Cố định động học dựa trên cảm biến quang học</span></div>
+                    </div>
+                `,
+                physics: `
+                    <div class="space-y-3">
+                        <p class="text-slate-300">Nguyên lý tách rời dựa vào sự chênh lệch vận tốc tuyến tính giữa hai băng tải kế tiếp ($v_{belt 2} > v_{belt 1}$).</p>
+                        <p class="text-orange-400 font-mono text-center my-2">$$a = \frac{v_2^2 - v_1^2}{2 \cdot s_{gap}}$$</p>
+                        <p class="text-slate-400 text-xs">Gia tốc $a$ tức thời khi gói hàng bước sang belt thứ 2 sẽ kéo dãn khoảng cách (gapping) so với gói hàng phía sau, chuẩn bị khoảng trống cho mắt đọc cảm biến.</p>
+                    </div>
+                `,
+                script: `
+                    <ul class="list-disc pl-4 space-y-2 text-slate-300">
+                        <li><strong>Thuyết trình:</strong> "Tiếp theo, gói hàng trôi từ bao lớn ra thường bị dính chùm hoặc chất chồng lên nhau. Đây là điểm nghẽn của mọi hệ thống phân loại cổ điển."</li>
+                        <li><strong>Giải pháp công nghệ:</strong> "Thiết bị Singulator sử dụng dải con lăn lệch góc và sự biến thiên gia tốc cơ học để 'đánh tơi' và dàn đều bưu kiện thành hàng dọc chuẩn chỉnh trước khi đi vào hầm cân quét."</li>
+                    </ul>
+                `,
+                simType: "singulator"
+            },
+            3: {
+                id: 3,
+                stage: "inbound",
+                stageLabel: "PHÂN KHU: INBOUND (NHẬP HÀNG & TIỀN XỬ LÝ)",
+                titleVi: "Hầm Quét Mã Vạch & Thể Tích DWS",
+                titleEn: "Dim Weight Scanners (DWS) Multi-Side Tunnel",
+                specs: `
+                    <div class="space-y-2">
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Cấu hình camera:</span><span class="text-white font-medium">6 camera quét đa chiều, 3D laser-triangulation</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Nhiệm vụ:</span><span class="text-white font-medium">Đo kích thước 3D + Cân trọng lượng + Đọc Barcode</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Phương thức cân động:</span><span class="text-white font-medium">Cảm biến lực điện từ EMFR phục hồi cân bằng</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Độ trễ xử lý (Latency):</span><span class="text-emerald-400 font-medium">< 120 miligiây (Chụp quét thời gian thực)</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Hệ thống chống nhiễu:</span><span class="text-white font-medium">AVC (Active Vibration Compensation) dập dao động</span></div>
+                    </div>
+                `,
+                physics: `
+                    <div class="space-y-3">
+                        <p class="text-slate-300">Sử dụng nguyên lý Phục hồi Lực Điện từ (EMFR) thay cho Load Cell lò xo truyền thống để giảm thời gian ổn định dao động cơ học.</p>
+                        <p class="text-orange-400 font-mono text-center my-2">$$F_{restoration} = B \cdot I \cdot L$$</p>
+                        <p class="text-slate-400 text-xs">Lực cân nặng bưu kiện tác dụng lên cánh tay đòn đẩy cuộn dây khỏi từ trường $B$. Hệ thống phát hiện góc lệch cực nhỏ và bơm dòng điện bù $I$ để giữ nguyên vị trí, tính toán trọng lượng chính xác cực nhanh.</p>
+                    </div>
+                `,
+                script: `
+                    <ul class="list-disc pl-4 space-y-2 text-slate-300">
+                        <li><strong>Thuyết trình:</strong> "Trái tim của khâu kiểm soát dữ liệu là hầm quét DWS 6 chiều. Toàn bộ thông tin vật lý bao gồm mã bưu cục, kích thước bao bì 3D và trọng lượng tĩnh được phân tích đồng thời."</li>
+                        <li><strong>Điểm nhấn AI:</strong> "Bằng việc ứng dụng Machine Learning, máy tự học hình ảnh của hàng triệu mã vạch rách, nhăn để tự động chỉnh bộ lọc tương phản, loại bỏ hoàn toàn hiện tượng lỗi đọc mã của bưu kiện dạng túi mềm (polybags)."</li>
+                    </ul>
+                `,
+                simType: "dws"
+            },
+            4: {
+                id: 4,
+                stage: "inbound",
+                stageLabel: "PHÂN KHU: INBOUND (NHẬP HÀNG & TIỀN XỬ LÝ)",
+                titleVi: "Bánh Xe Điều Hướng Wheel Sorter",
+                titleEn: "Pivot Wheel Sorter (O-Belt Modular System)",
+                specs: `
+                    <div class="space-y-2">
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Cơ chế điều hướng:</span><span class="text-white font-medium">Các hàng bánh xe xoay góc độc lập</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Góc xoay chuyển hướng:</span><span class="text-white font-medium">30° / 45° xoay đảo chiều liên tục</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Động cơ truyền động:</span><span class="text-white font-medium">Động cơ servo tích hợp mâm xoay độc lập</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Vật liệu bánh xe:</span><span class="text-white font-medium">Phủ polyurethane (PU) tăng ma sát, chống xước hàng</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Ứng dụng mục tiêu:</span><span class="text-white font-medium">Phân luồng bưu kiện kích thước nhỏ hoặc dạng túi polybag</span></div>
+                    </div>
+                `,
+                physics: `
+                    <div class="space-y-3">
+                        <p class="text-slate-300">Chuyển hướng dựa trên việc thay đổi véc-tơ thành phần vận tốc tiếp xúc thông qua việc điều chỉnh góc xoay $\theta$ của bánh xe dẫn động.</p>
+                        <p class="text-orange-400 font-mono text-center my-2">$$\theta = \arctan\left(\frac{v_y}{v_x}\right)$$</p>
+                        <p class="text-slate-400 text-xs">Mâm xoay servo hoàn thành phản hồi bẻ bánh góc $\theta$ trong thời gian $\Delta t < 150 \text{ ms}$ từ khi nhận lệnh của PLC, giúp thay đổi hướng chuyển động mượt mà không gây lật, quăng bưu kiện.</p>
+                    </div>
+                `,
+                script: `
+                    <ul class="list-disc pl-4 space-y-2 text-slate-300">
+                        <li><strong>Thuyết trình:</strong> "Hệ thống Wheel Sorter sử dụng cấu trúc bánh xe ma sát bọc PU kết hợp dây đai O-belt. Dựa trên dữ liệu từ hầm quét DWS phía trước..."</li>
+                        <li><strong>Định tuyến:</strong> "Những bưu kiện dạng túi mềm, siêu nhỏ sẽ được cụm bánh xe bẻ góc mượt mà đẩy sang luồng phân loại riêng biệt, không cho đi chung luồng hàng nặng nhằm tránh nảy bật, rơi rớt cơ học."</li>
+                    </ul>
+                `,
+                simType: "wheelsort"
+            },
+            5: {
+                id: 5,
+                stage: "sortation",
+                stageLabel: "PHÂN KHU: SORTATION (CHIA CHỌN CHÍNH XÁC)",
+                titleVi: "Khay Băng Chuyền Chéo (Carriers Loop)",
+                titleEn: "Cross-belt Trolley & Carrying Carriage",
+                specs: `
+                    <div class="space-y-2">
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Cơ cấu liên kết khay:</span><span class="text-white font-medium">Xe hợp kim nhôm khối liên kết khớp vạn năng</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Băng tải khay (Cross-belt):</span><span class="text-white font-medium">Một băng tải nhỏ độc lập chạy vuông góc hướng di chuyển</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Tốc độ vòng lặp chính:</span><span class="text-white font-medium">Tuyến tính lên tới 2.5 m/s</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Cấp năng lượng khay:</span><span class="text-emerald-400 font-medium">Truyền điện không tiếp xúc cảm ứng từ trường</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Độ hở không khí cấp điện:</span><span class="text-white font-medium">20 mm (Loại bỏ mài mòn chổi than 100%)</span></div>
+                    </div>
+                `,
+                physics: `
+                    <div class="space-y-3">
+                        <p class="text-slate-300">Việc truyền năng lượng cho mô-tơ DC trên khay áp dụng nguyên lý cảm ứng điện từ không tiếp xúc bằng dòng xoay chiều trung tần truyền qua khe hở không khí.</p>
+                        <p class="text-orange-400 font-mono text-center my-2">$$\eta_{power} \approx 98\% \quad \text{at} \quad Gap = 20\text{mm}$$</p>
+                        <p class="text-slate-400 text-xs">Giúp triệt tiêu ma sát lăn, giảm 80% hao mòn cơ khí, hoàn toàn không phát sinh nhiệt lượng dư thừa hoặc bụi carbon trong kho vận hành.</p>
+                    </div>
+                `,
+                script: `
+                    <ul class="list-disc pl-4 space-y-2 text-slate-300">
+                        <li><strong>Thuyết trình:</strong> "Tiến vào khu vực Sortation trung tâm, bưu kiện được nạp lên vòng lặp xích tải Cross-belt khổng lồ. Vòng lặp này chạy với vận tốc lên tới 2.5 m/s."</li>
+                        <li><strong>Cải tiến cơ khí:</strong> "Toàn bộ khay tải sử dụng công nghệ cấp điện không tiếp xúc qua khe hở không khí 20mm. Thiết kế này loại bỏ hoàn toàn hệ thống ray cấp điện chổi than kiểu cũ, giúp kho vận hành không tiếng ồn và cắt giảm 80% chi phí bảo dưỡng cơ cấu kéo."</li>
+                    </ul>
+                `,
+                simType: "carriers"
+            },
+            6: {
+                id: 6,
+                stage: "sortation",
+                stageLabel: "PHÂN KHU: SORTATION (CHIA CHỌN CHÍNH XÁC)",
+                titleVi: "Bộ Định Tuyến AI (Não Bộ Trung Tâm)",
+                titleEn: "AI Routing Engine & Real-Time Controller",
+                specs: `
+                    <div class="space-y-2">
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Nền tảng tích hợp:</span><span class="text-white font-medium">WCS (Warehouse Control System) + Cloud AI</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Độ chính xác định tuyến:</span><span class="text-emerald-400 font-bold">99.95% (Tiêu chuẩn vàng quốc tế)</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Giao tiếp tín hiệu:</span><span class="text-white font-medium">Thu phát tia hồng ngoại (IR) tĩnh dọc đường ray</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Độ trễ truyền tín hiệu:</span><span class="text-white font-medium">< 10 miligiây</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Tính toán quỹ đạo:</span><span class="text-white font-medium">Bù động học dựa trên khối lượng/friction bưu kiện</span></div>
+                    </div>
+                `,
+                physics: `
+                    <div class="space-y-3">
+                        <p class="text-slate-300">Hệ thống AI tính toán thời điểm và gia tốc kích hoạt băng tải khay để xả hàng theo phương trình động lực học tổng hợp véc-tơ vận tốc.</p>
+                        <p class="text-orange-400 font-mono text-center my-2">$$\vec{v}_{absolute} = \vec{v}_{sorter} + \vec{v}_{discharge}$$</p>
+                        <p class="text-slate-400 text-xs">Vận tốc tuyệt đối của gói hàng khi rời khay là tổng véc-tơ của vận tốc xích tải chính ($\vec{v}_{sorter}$) và vận tốc băng chuyền chéo phụ trên khay ($\vec{v}_{discharge}$). AI điều chỉnh góc lệch xả chính xác từng độ.</p>
+                    </div>
+                `,
+                script: `
+                    <ul class="list-disc pl-4 space-y-2 text-slate-300">
+                        <li><strong>Thuyết trình:</strong> "Trí tuệ nhân tạo (AI) đóng vai trò là tổng chỉ huy. Khi một bưu kiện đã nằm trên khay, máy tính trung tâm sẽ đối chiếu cơ sở dữ liệu bưu cục phát..."</li>
+                        <li><strong>Định thời gian:</strong> "Nó sẽ tính toán chính xác thời điểm xe chạy qua máng xả mục tiêu, sử dụng tín hiệu hồng ngoại không dây bắn lệnh xuống mô-tơ bước trên khay để kích hoạt xả hàng trong chớp mắt."</li>
+                    </ul>
+                `,
+                simType: "airouter"
+            },
+            7: {
+                id: 7,
+                stage: "sortation",
+                stageLabel: "PHÂN KHU: SORTATION (CHIA CHỌN CHÍNH XÁC)",
+                titleVi: "Hệ Thống Chia Chọn Hàng Siêu Nhẹ",
+                titleEn: "Small Parcel Cross-belt Sorting System",
+                specs: `
+                    <div class="space-y-2">
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Trọng lượng mục tiêu:</span><span class="text-white font-medium">Bưu kiện siêu nhẹ dưới 100 gram (Son, phụ kiện,...)</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Kích thước giới hạn:</span><span class="text-white font-medium">10 cm - 100 cm</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Tinh chỉnh khay:</span><span class="text-white font-medium">Belt cấu trúc nhám tổ ong, tăng ma sát tĩnh</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Giới hạn gia tốc xả:</span><span class="text-emerald-400 font-medium">Xả tốc độ thấp tránh hiện tượng gió cản trượt quỹ đạo</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Máng xả chuyên dụng:</span><span class="text-white font-medium">Vách máng bọc xốp mềm EVA giảm va đập</span></div>
+                    </div>
+                `,
+                physics: `
+                    <div class="space-y-3">
+                        <p class="text-slate-300">Đối với hàng siêu nhẹ ($m < 100\text{g}$), lực cản không khí ($F_{drag}$) và lực quán tính li tâm dễ làm sai lệch quỹ đạo rơi tự do.</p>
+                        <p class="text-orange-400 font-mono text-center my-2">$$F_{drag} = \frac{1}{2} C_d \cdot \rho \cdot A \cdot v^2 \approx F_{gravity}$$</p>
+                        <p class="text-slate-400 text-xs">Lực cản gió lớn tương đương trọng lượng bưu kiện nhẹ, do đó hệ thống Small Parcel tinh chỉnh gia tốc xả nhỏ hơn, tăng góc nghiêng xả để đảm bảo bưu kiện không bị bay lửng lơ chệch máng.</p>
+                    </div>
+                `,
+                script: `
+                    <ul class="list-disc pl-4 space-y-2 text-slate-300">
+                        <li><strong>Thuyết trình:</strong> "Lazada Logistics Park thiết kế riêng một phân khu Small Parcel Cross-belt. Đây là cải tiến thực chiến cực kỳ đắt giá."</li>
+                        <li><strong>Ngăn ngừa rủi ro:</strong> "Mỹ phẩm, son môi, ốp điện thoại dưới 100g nếu chạy chung máng lớn dễ bị lực ly tâm hất văng ra ngoài hoặc bị gió thổi bay chệch hướng. Phân khu này bọc mút EVA triệt tiêu lực nảy, gom hàng chuẩn xác tuyệt đối."</li>
+                    </ul>
+                `,
+                simType: "smallparcel"
+            },
+            8: {
+                id: 8,
+                stage: "outbound",
+                stageLabel: "PHÂN KHU: OUTBOUND (XUẤT HÀNG & PHÂN PHỐI)",
+                titleVi: "Máng Trượt Thả Hàng (Discharge Chutes)",
+                titleEn: "Discharge Chutes & Drop Gravity Collection",
+                specs: `
+                    <div class="space-y-2">
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Biên dạng máng trượt:</span><span class="text-white font-medium">Đường cong xoắn ốc (Helical Chutes) tiết kiệm diện tích</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Vật liệu bề mặt:</span><span class="text-white font-medium">Thép không gỉ dập nhám vi sợi</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Năng lực phân tuyến:</span><span class="text-white font-medium">Chia chọn trực tiếp cho hơn 350 bưu cục toàn quốc</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Cơ chế thu gom:</span><span class="text-white font-medium">Túi Canvas bọc khung kim loại gắn khóa định danh</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Góc dốc máng:</span><span class="text-white font-medium">Độ dốc tối ưu 22° - 28° trượt tự nhiên</span></div>
+                    </div>
+                `,
+                physics: `
+                    <div class="space-y-3">
+                        <p class="text-slate-300">Chuyển động rơi parabol tự do của bưu kiện khi trượt khỏi khay chuyển thành chuyển động trượt xoắn ốc có gia tốc hãm ma sát.</p>
+                        <p class="text-orange-400 font-mono text-center my-2">$$x(t) = v_{linear} \cdot t, \quad z(t) = z_0 - \frac{1}{2}g \cdot t^2$$</p>
+                        <p class="text-slate-400 text-xs">Biên dạng máng cong giúp bưu kiện hạ cánh êm ái, bảo vệ tuyệt đối các sản phẩm dễ vỡ bên trong như chai lọ thủy tinh, đồ điện tử.</p>
+                    </div>
+                `,
+                script: `
+                    <ul class="list-disc pl-4 space-y-2 text-slate-300">
+                        <li><strong>Thuyết trình:</strong> "Khi bưu kiện được khay Cross-belt hất ra, nó sẽ bay theo một đường parabol hoàn hảo rơi gọn xuống Máng xoắn ốc inox chống xước."</li>
+                        <li><strong>Phân tuyến:</strong> "Hệ thống máng này tự động định tuyến bưu kiện đến hơn 350 bưu cục phát trên toàn quốc hoặc phân loại riêng cho các đối tác giao nhận bên thứ ba (3PLs)."</li>
+                    </ul>
+                `,
+                simType: "chutes"
+            },
+            9: {
+                id: 9,
+                stage: "outbound",
+                stageLabel: "PHÂN KHU: OUTBOUND (XUẤT HÀNG & PHÂN PHỐI)",
+                titleVi: "Mạng Lưới Cảm Biến An Toàn & PLC",
+                titleEn: "Smart Sensors & PLC Flow Control Gate",
+                specs: `
+                    <div class="space-y-2">
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Loại cảm biến:</span><span class="text-white font-medium">Cảm biến quang điện (Photoelectric Sensor - PEC) thu phát</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Chức năng cốt lõi:</span><span class="text-white font-medium">Phát hiện đầy máng (Chute Full Detection)</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Hệ thống phản ứng:</span><span class="text-emerald-400 font-medium">Đóng nắp cửa máng bằng ben khí nén tức thời</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Điều phối dự phòng:</span><span class="text-white font-medium">PLC tự động định tuyến hàng sang máng phụ (Overflow chute)</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-white font-medium">Cảnh báo vật lý:</span><span class="text-white font-medium">Đèn còi tháp tín hiệu LED 3 tầng (Xanh - Vàng - Đỏ)</span></div>
+                    </div>
+                `,
+                physics: `
+                    <div class="space-y-3">
+                        <p class="text-slate-300">Cảm biến quang phát ra một chùm tia hồng ngoại không đổi. Khi bưu kiện lấp đầy máng trượt, chùm tia bị ngắt quãng liên tục vượt ngưỡng $\Delta t_{block} > 3\text{s}$.</p>
+                        <p class="text-orange-400 font-mono text-center my-2">$$\text{If } \Delta t_{block} \ge 3.0\text{s} \implies \text{Signal} = 1 \implies \text{Chute Full}$$</p>
+                        <p class="text-slate-400 text-xs">Khi đó, bộ điều khiển khả trình PLC phát tín hiệu điều khiển van khí nén đóng máng và chuyển hướng khay khẩn cấp, ngăn chặn hiện tượng dồn ứ, kẹt hàng dây chuyền.</p>
+                    </div>
+                `,
+                script: `
+                    <ul class="list-disc pl-4 space-y-2 text-slate-300">
+                        <li><strong>Thuyết trình:</strong> "Để ngăn ngừa rủi ro tắc nghẽn, mỗi cửa xả đều trang bị cụm cảm biến hồng ngoại thông minh. Khi máng xả đầy..."</li>
+                        <li><strong>Tự động hóa:</strong> "Cảm biến sẽ gửi tín hiệu kích hoạt hệ thống ben khí nén đóng cửa máng ngay lập tức, đồng thời nháy đèn còi để nhân viên tới thay túi mới, trong khi hệ thống tự động đẩy bưu kiện tiếp theo sang máng xả dự phòng."</li>
+                    </ul>
+                `,
+                simType: "sensors"
+            },
+            10: {
+                id: 10,
+                stage: "outbound",
+                stageLabel: "PHÂN KHU: OUTBOUND (XUẤT HÀNG & PHÂN PHỐI)",
+                titleVi: "Băng Chuyền Telescopic Outbound",
+                titleEn: "Outbound Auto-Outbound Mobile Telescopic",
+                specs: `
+                    <div class="space-y-2">
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Kiểu thiết bị:</span><span class="text-white font-medium">Băng tải vươn dài di động (Mobile Telescopic)</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Chức năng xuất kho:</span><span class="text-emerald-400 font-bold">Auto-Outbound (Tự động quét hoàn toàn)</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Nhiệm vụ:</span><span class="text-white font-medium">Ghi nhận trạng thái bưu kiện xuất kho lên hệ thống dữ liệu</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Theo dõi hành trình:</span><span class="text-white font-medium">Cập nhật Track-and-Trace thời gian thực lên hệ thống</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Cơ chế bảo vệ:</span><span class="text-white font-medium">Màng bảo vệ chống bụi và tác động thời tiết cửa dock</span></div>
+                    </div>
+                `,
+                physics: `
+                    <div class="space-y-3">
+                        <p class="text-slate-300">Áp dụng công nghệ nhận diện ký tự và mã vạch quang học tốc độ cao (OCR Reader) quét bọc túi lớn.</p>
+                        <p class="text-orange-400 font-mono text-center my-2">$$\text{Scan Rate} = 100\% \quad \text{at} \quad v_{conveyor} \le 1.5\text{ m/s}$$</p>
+                        <p class="text-slate-400 text-xs">Loại bỏ hoàn toàn công đoạn công nhân cầm súng scan quét thủ công từng bao hàng, tăng 400% tốc độ thông xe tại bãi đỗ xuất hàng.</p>
+                    </div>
+                `,
+                script: `
+                    <ul class="list-disc pl-4 space-y-2 text-slate-300">
+                        <li><strong>Thuyết trình:</strong> "Tại khu vực Outbound, Lazada áp dụng giải pháp Auto-Outbound xuất kho tự động. Hệ thống camera và cảm biến tự động quét các túi hàng lớn..."</li>
+                        <li><strong>Track and trace:</strong> "Quá trình này ngay lập tức cập nhật trạng thái 'Đã xuất kho' lên Cloud, giúp khách hàng nhận được thông báo hành trình trên app Lazada ngay lập tức mà không cần bất kỳ thao tác thủ công nào của tài xế."</li>
+                    </ul>
+                `,
+                simType: "telescopico"
+            },
+            11: {
+                id: 11,
+                stage: "outbound",
+                stageLabel: "PHÂN KHU: OUTBOUND (XUẤT HÀNG & PHÂN PHỐI)",
+                titleVi: "Điều Phối Giao Hàng Xanh (EVs)",
+                titleEn: "Green Logistics & Smart EV Dispatching",
+                specs: `
+                    <div class="space-y-2">
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Dòng phương tiện:</span><span class="text-emerald-400 font-bold">Xe máy điện thông minh Selex Camel</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Tải trọng thiết bị:</span><span class="text-white font-medium">Thiết kế khung gầm chịu lực nặng, tối ưu cho thùng hàng</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Quãng đường hoạt động:</span><span class="text-white font-medium">150 km sau mỗi chu kỳ pin</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-white font-medium">Thời gian đổi pin:</span><span class="text-emerald-400 font-bold">Chỉ 2 phút tại trạm đổi pin tự động của kho</span></div>
+                        <div class="flex justify-between border-b border-slate-800/50 pb-1"><span class="text-slate-400">Lợi ích môi trường:</span><span class="text-white font-medium">Giảm thiểu tối đa lượng phát thải CO2 ra đô thị</span></div>
+                    </div>
+                `,
+                physics: `
+                    <div class="space-y-3">
+                        <p class="text-slate-300">Hệ thống AI tự động phân bổ phương tiện dặm cuối dựa trên dữ liệu thể tích và trọng lượng từ cụm DWS nạp vào.</p>
+                        <p class="text-orange-400 font-mono text-center my-2">$$\text{If } \text{Volumetric Weight} \le \text{Threshold} \implies \text{Route to Smart EV}$$</p>
+                        <p class="text-slate-400 text-xs">Các đơn hàng nhẹ, gọn trong nội đô được bóc tách sớm để giao bằng xe điện Camel, trong khi xe tải lớn chỉ gom hàng nặng, cồng kềnh, tối ưu hóa mức tiêu hao nhiên liệu toàn hệ thống.</p>
+                    </div>
+                `,
+                script: `
+                    <ul class="list-disc pl-4 space-y-2 text-slate-300">
+                        <li><strong>Thuyết trình:</strong> "Hành trình vật lý của gói hàng kết thúc bằng giải pháp Logistics Xanh. Lazada là nền tảng tiên phong đưa hàng trăm xe máy điện Selex Camel vào hoạt động giao vận dặm cuối."</li>
+                        <li><strong>Kết quả:</strong> "Dựa trên dữ liệu đo lường thể tích ban đầu, AI tự động xếp hàng nhẹ lên đội xe điện đổi pin siêu tốc trong 2 phút, giúp giảm phát thải khí nhà kính carbon dioxide, thiết lập tiêu chuẩn ESG thực tế cho chuỗi cung ứng."</li>
+                    </ul>
+                `,
+                simType: "evs"
+            }
+        };
+
+        let currentNodeId = 1;
+        let activeTab = "specs";
+        let autoplayInterval = null;
+
+        // On document load
+        window.onload = function() {
+            selectNode(1);
+        };
+
+        // Switch Stage View
+        function switchStage(stage) {
+            // Find first node of that stage
+            let targetNodeId = 1;
+            if (stage === 'sortation') targetNodeId = 5;
+            if (stage === 'outbound') targetNodeId = 8;
+            selectNode(targetNodeId);
+        }
+
+        // Handle Node Selection
+        function selectNode(id) {
+            currentNodeId = id;
+            let node = nodesData[id];
+
+            // Update UI status bars
+            document.getElementById("stepCounter").innerText = `Bước ${id} / 11`;
+            document.getElementById("stageName").innerText = node.stageLabel;
+            document.getElementById("nodeNameBig").innerText = `THIẾT BỊ SỐ: ${id < 10? '0' + id : id}`;
+            document.getElementById("machineTitleVi").innerText = node.titleVi;
+            document.getElementById("machineTitleEn").innerText = node.titleEn;
+
+            // Highlight selected map tab button
+            const stages = ['inbound', 'sortation', 'outbound'];
+            stages.forEach(s => {
+                let tab = document.getElementById(`tab-${s}`);
+                if (s === node.stage) {
+                    tab.className = "px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-orange-500/10 text-orange-400 border-orange-500/20";
+                } else {
+                    tab.className = "px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all text-slate-400 border-slate-800 hover:border-slate-700";
+                }
+            });
+
+            // Pulse glowing ring on selected SVG node
+            for (let i = 1; i <= 11; i++) {
+                let pulse = document.getElementById(`pulse-${i}`);
+                if (pulse) {
+                    if (i === id) pulse.classList.remove("hidden");
+                    else pulse.classList.add("hidden");
+                }
+            }
+
+            // Redraw dynamic live simulation
+            drawSimulation(node.simType);
+
+            // Update panel text content
+            updatePanelContent();
+        }
+
+        // Stepper: Previous Node
+        function prevNode() {
+            let nextId = currentNodeId - 1;
+            if (nextId < 1) nextId = 11;
+            selectNode(nextId);
+        }
+
+        // Stepper: Next Node
+        function nextNode() {
+            let nextId = currentNodeId + 1;
+            if (nextId > 11) nextId = 1;
+            selectNode(nextId);
+        }
+
+        // Switch info subtabs inside panel (Specs / Physics / Script)
+        function switchPanelTab(tab) {
+            activeTab = tab;
+            const tabs = ['specs', 'physics', 'script'];
+            tabs.forEach(t => {
+                let btn = document.getElementById(`tabBtn-${t}`);
+                if (t === tab) {
+                    btn.className = "flex-1 py-2 text-center text-orange-400 border-b-2 border-orange-500";
+                } else {
+                    btn.className = "flex-1 py-2 text-center text-slate-400 border-b-2 border-transparent";
+                }
+            });
+            updatePanelContent();
+        }
+
+        // Update the textual content of the active panel tab
+        function updatePanelContent() {
+            let node = nodesData[currentNodeId];
+            let container = document.getElementById("tabContent");
+            if (activeTab === "specs") container.innerHTML = node.specs;
+            else if (activeTab === "physics") container.innerHTML = node.physics;
+            else if (activeTab === "script") container.innerHTML = node.script;
+
+            // THÊM DÒNG NÀY: Ép trình duyệt vẽ lại công thức Toán học khi đổi tab
+            if (window.MathJax) { window.MathJax.typeset(); }
+        }
+        // Autoplay presentation controller
+        document.getElementById("autoplayBtn").addEventListener("click", function() {
+            let btn = document.getElementById("autoplayBtn");
+            if (autoplayInterval) {
+                // Stop Autoplay
+                clearInterval(autoplayInterval);
+                autoplayInterval = null;
+                btn.innerHTML = `<i class="fa-solid fa-play"></i><span>Tự Động Thuyết Trình</span>`;
+                btn.className = "flex-items gap-2 bg-orange-600 hover:bg-orange-500 text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 glow-orange flex";
+            } else {
+                // Start Autoplay
+                selectNode(1);
+                autoplayInterval = setInterval(() => {
+                    nextNode();
+                }, 6000); // Transitions slide every 6 seconds
+                btn.innerHTML = `<i class="fa-solid fa-pause"></i><span>Đang Tự Động Chạy (6s)</span>`;
+                btn.className = "flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 glow-blue flex";
+            }
+        });
+
+        // LIVE ANIMATION SIMULATION ENGINE (Renders CSS/HTML inside the simulation box)
+        function drawSimulation(type) {
+            let area = document.getElementById("simulationArea");
+            area.innerHTML = ""; // Clear old simulation
+
+            if (type === "telescopic") {
+                area.innerHTML = `
+                    <div class="w-full h-full flex flex-col justify-end p-4 relative bg-slate-950">
+                        <div class="absolute top-2 left-4 text-[10px] text-orange-500 font-mono tracking-widest uppercase"><i class="fa-solid fa-truck"></i> Truck Docking Simulation</div>
+                        <div class="absolute text-[20px] left-4 bottom-4 w-12 h-20 bg-slate-800 rounded-lg border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400"> <i class="fa-solid fa-truck"></i> </div>
+                        <div class="absolute bottom-10 left-16 right-10 h-6 bg-slate-900 border border-slate-800 rounded-md flex items-center overflow-hidden">
+                            <div class="w-full h-2 bg-orange-500/25 animate-pulse"></div>
+                        </div>
+                        <div class="absolute bottom-11 right-12 w-6 h-4 bg-orange-500 rounded flex items-center justify-center text-[10px] font-bold text-white shadow-lg animate-bounce">📦</div>
+                    </div>
+                `;
+            } 
+            else if (type === "singulator") {
+                area.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center p-4 relative bg-slate-950">
+                        <div class="absolute top-2 left-4 text-[10px] text-orange-500 font-mono tracking-widest uppercase"><i class="fa-solid fa-shuffle"></i> Gapping Differential</div>
+                        <div class="flex space-x-1 absolute left-6 items-center">
+                            <div class="w-5 h-5 bg-orange-600/60 rounded flex items-center justify-center text-[9px]">📦</div>
+                            <div class="w-5 h-5 bg-orange-600/60 rounded flex items-center justify-center text-[9px] -mt-2">📦</div>
+                            <div class="w-5 h-5 bg-orange-600/60 rounded flex items-center justify-center text-[9px]">📦</div>
+                        </div>
+                        <div class="text-slate-700 text-xl"><i class="fa-solid fa-arrow-right-long animate-pulse"></i></div>
+                        <div class="flex space-x-10 absolute right-6 items-center">
+                            <div class="w-6 h-6 bg-orange-500 rounded flex items-center justify-center text-xs animate-pulse">📦</div>
+                            <div class="w-6 h-6 bg-orange-500 rounded flex items-center justify-center text-xs">📦</div>
+                        </div>
+                    </div>
+                `;
+            } 
+            else if (type === "dws") {
+                area.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center p-4 relative bg-slate-950">
+                        <div class="absolute top-2 left-4 text-[10px] text-orange-500 font-mono tracking-widest uppercase"><i class="fa-solid fa-camera"></i> Scan Tunnel active</div>
+                        <div class="w-32 h-24 border-2 border-dashed border-cyan-500/40 rounded-xl relative flex items-center justify-center">
+                            <div class="absolute left-0 right-0 h-0.5 bg-cyan-400 laser-line shadow-lg shadow-cyan-500"></div>
+                            <div class="w-16 h-12 bg-slate-800 border border-slate-700 rounded-lg flex flex-col justify-center items-center text-[9px] font-mono text-cyan-400">
+                                <span class="font-bold text-white">📦 DWS</span>
+                                <span id="weightVal">1.25 kg</span>
+                            </div>
+                        </div>
+                        <div class="absolute right-4 top-10 text-[9px] font-mono text-emerald-400 space-y-0.5 bg-slate-900 p-2 rounded border border-slate-800">
+                            <div>W: 1.250 kg</div>
+                            <div>L: 25.4 cm</div>
+                            <div>H: 15.2 cm</div>
+                        </div>
+                    </div>
+                `;
+                // Start a micro dynamic digit counter simulation for DWS
+                setInterval(() => {
+                    let w = (Math.random() * 5 + 0.1).toFixed(3);
+                    let element = document.getElementById("weightVal");
+                    if (element) element.innerText = `${w} kg`;
+                }, 1500);
+            } 
+            else if (type === "wheelsort") {
+                area.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center p-4 relative bg-slate-950">
+                        <div class="absolute top-2 left-4 text-[10px] text-orange-500 font-mono tracking-widest uppercase"><i class="fa-solid fa-arrows-split-up-and-left"></i> Diverter Pivot Angle</div>
+                        <div class="flex space-x-12 items-center">
+                            <div class="flex flex-col space-y-1">
+                                <div class="w-5 h-5 bg-cyan-500 rounded flex items-center justify-center text-[9px] text-white">100g</div>
+                                <span class="text-[9px] text-cyan-400 font-mono">Redirect 45°</span>
+                            </div>
+                            <div class="text-3xl text-slate-800 rotate-45"><i class="fa-solid fa-compass-drafting animate-spin"></i></div>
+                            <div class="flex flex-col space-y-1">
+                                <div class="w-8 h-8 bg-orange-600 rounded flex items-center justify-center text-xs text-white">15kg</div>
+                                <span class="text-[9px] text-slate-500 font-mono">Straight</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } 
+            else if (type === "carriers") {
+                area.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center p-4 relative bg-slate-950">
+                        <div class="absolute top-2 left-4 text-[10px] text-orange-500 font-mono tracking-widest uppercase"><i class="fa-solid fa-bolt"></i> Contactless Induction loop</div>
+                        <div class="flex items-center space-x-4 border border-dashed border-blue-500/30 p-3 rounded-xl bg-slate-900/30">
+                            <div class="text-blue-400 text-3xl animate-pulse"><i class="fa-solid fa-tower-broadcast"></i></div>
+                            <div class="text-xs font-mono text-slate-400">
+                                <div>Air Gap: <span class="text-blue-400 font-bold">20 mm</span></div>
+                                <div>Hi-Frequency: <span class="text-blue-400 font-bold">98% Efficient</span></div>
+                                <div>No Chổi Than / No Friction</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } 
+            else if (type === "airouter") {
+                area.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center p-4 relative bg-slate-950">
+                        <div class="absolute top-2 left-4 text-[10px] text-orange-500 font-mono tracking-widest uppercase"><i class="fa-solid fa-brain"></i> AI Path Optimisation</div>
+                        <div class="w-48 h-20 relative border border-slate-800/80 rounded-lg flex items-center justify-center bg-slate-900/10">
+                            <div class="absolute left-4 w-3 h-3 bg-blue-500 rounded-full animate-ping"></div>
+                            <div class="absolute left-4 w-3 h-3 bg-blue-500 rounded-full"></div>
+                            
+                            <div class="absolute right-4 w-3 h-3 bg-orange-500 rounded-full animate-pulse"></div>
+                            <div class="absolute right-4 w-3 h-3 bg-orange-500 rounded-full"></div>
+                            
+                            <svg class="absolute inset-0 w-full h-full" stroke="#f36f21" stroke-width="1.5" stroke-dasharray="4, 4">
+                                <line x1="20" y1="40" x2="170" y2="40" class="conveyor-flow-fast" />
+                            </svg>
+                            <div class="text-[9px] font-mono text-emerald-400 mt-10">Calc Vector time-to-chute: 45ms</div>
+                        </div>
+                    </div>
+                `;
+            } 
+            else if (type === "smallparcel") {
+                area.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center p-4 relative bg-slate-950">
+                        <div class="absolute top-2 left-4 text-[10px] text-orange-500 font-mono tracking-widest uppercase"><i class="fa-solid fa-box-open"></i> Small Parcel Cross-belt</div>
+                        <div class="flex items-center space-x-4">
+                            <div class="w-12 h-12 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-center text-lg animate-bounce">💄</div>
+                            <div class="text-xs font-mono text-slate-400">
+                                <div>Trọng lượng: <span class="text-orange-400 font-bold">&lt; 100 gram</span></div>
+                                <div>Kích thước: <span class="text-orange-400 font-bold">15 cm</span></div>
+                                <div>Tấm khay: <span class="text-emerald-400">Nhám tổ ong</span></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } 
+            else if (type === "chutes") {
+                area.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center p-4 relative bg-slate-950">
+                        <div class="absolute top-2 left-4 text-[10px] text-orange-500 font-mono tracking-widest uppercase"><i class="fa-solid fa-reply"></i> Parabolic Discharge</div>
+                        <div class="w-full h-24 relative">
+                            <div class="absolute bottom-2 right-12 w-14 h-14 border border-slate-800 bg-slate-900 rounded-t-lg flex items-center justify-center text-xs font-bold text-slate-500">MÁNG</div>
+                            <div class="absolute left-10 top-2 w-4 h-4 bg-orange-500 rounded flex items-center justify-center text-[8px] text-white shadow-md" id="fallingPkg">📦</div>
+                        </div>
+                    </div>
+                `;
+                // Animate parcel falling parabola
+                let p = document.getElementById("fallingPkg");
+                let t = 0;
+                setInterval(() => {
+                    t += 0.05;
+                    let x = 40 + t * 150;
+                    let y = 10 + t * t * 50;
+                    if (x > 180) {
+                        t = 0;
+                        x = 40;
+                        y = 10;
+                    }
+                    if (p) {
+                        p.style.left = `${x}px`;
+                        p.style.top = `${y}px`;
+                    }
+                }, 40);
+            } 
+            else if (type === "sensors") {
+                area.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center p-4 relative bg-slate-950">
+                        <div class="absolute top-2 left-4 text-[10px] text-orange-500 font-mono tracking-widest uppercase"><i class="fa-solid fa-triangle-exclamation"></i> Chute block alert</div>
+                        <div class="flex items-center space-x-6">
+                            <div class="flex flex-col space-y-1 bg-slate-900 border border-slate-800 p-2 rounded-lg">
+                                <div class="w-4 h-4 rounded-full bg-red-600 animate-pulse glow-orange"></div>
+                                <div class="w-4 h-4 rounded-full bg-slate-800"></div>
+                                <div class="w-4 h-4 rounded-full bg-slate-800"></div>
+                            </div>
+                            <div class="text-xs font-mono text-slate-400">
+                                <div class="text-red-500 font-bold animate-pulse">CHUTE FULL BLOCK DETECTED</div>
+                                <div>Auto Switch: <span class="text-emerald-400">Máng phụ active</span></div>
+                                <div>Pneumatic valve: <span class="text-emerald-400">Closed</span></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } 
+            else if (type === "telescopico") {
+                area.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center p-4 relative bg-slate-950">
+                        <div class="absolute top-2 left-4 text-[10px] text-orange-500 font-mono tracking-widest uppercase"><i class="fa-solid fa-cloud-arrow-up"></i> Auto Outbound System</div>
+                        <div class="flex items-center space-x-4 border border-slate-800 bg-slate-900 p-3 rounded-xl">
+                            <div class="text-orange-500 text-3xl animate-bounce"><i class="fa-solid fa-cloud"></i></div>
+                            <div class="text-xs font-mono text-slate-400">
+                                <div class="text-white font-bold">STATUS UPDATED</div>
+                                <div>State: <span class="text-emerald-400 font-bold">"Đã xuất kho"</span></div>
+                                <div>Latency: <span class="text-emerald-400">0.05 ms</span></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } 
+            else if (type === "evs") {
+                area.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center p-4 relative bg-slate-950">
+                        <div class="absolute top-2 left-4 text-[10px] text-orange-500 font-mono tracking-widest uppercase"><i class="fa-solid fa-leaf"></i> Eco Friendly Last Mile</div>
+                        <div class="flex items-center space-x-6 relative w-full px-6">
+                            <div class="text-emerald-400 text-4xl animate-bounce"><i class="fa-solid fa-motorcycle"></i></div>
+                            <div class="text-xs font-mono text-slate-400">
+                                <div class="text-emerald-400 font-bold flex items-center gap-1"><i class="fa-solid fa-battery-three-quarters"></i> Selex Camel EV</div>
+                                <div>Range: <span class="text-white font-bold">150 km</span></div>
+                                <div>Swap Pin: <span class="text-emerald-400">2 phút sạc</span></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Trigger visual effect inside simulation box on btn click
+        function triggerAction() {
+    let node = nodesData[currentNodeId];
+    let area = document.getElementById("simulationArea");
+    // Tạo hiệu ứng dòng lệnh PLC chạy
+    area.innerHTML = `
+        <div class="font-mono text-xs text-emerald-400 p-4 space-y-1">
+            <div>> CALL_PLC_NODE_${currentNodeId}: CONNECTING...</div>
+            <div>> SEND_TELEMETRY_DATA: SUCCESS</div>
+            <div>> EXECUTE_COMMAND: "${node.titleEn}" -> RUNNING</div>
+            <div class="animate-pulse text-orange-400">> STATUS: OPERATIONAL</div>
+        </div>
+    `;
+}
+        // function triggerAction() {
+        //     let node = nodesData[currentNodeId];
+        //     alert(`Đang gửi tín hiệu cưỡng bức kích hoạt PLC của thiết bị: "${node.titleVi}" để lấy dữ liệu telemetry và mô phỏng động...`);
+        //     // Flash area container
+        //     let area = document.getElementById("simulationArea");
+        //     area.classList.add("border-orange-500");
+        //     setTimeout(() => {
+        //         area.classList.remove("border-orange-500");
+        //     }, 1000);
+        // }
+    </script>
+</body>
+</html>
